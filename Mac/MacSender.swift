@@ -40,7 +40,7 @@ enum StreamQuality: String, CaseIterable {
 
     var bitrate: Int {
         switch self {
-        case .best: return 18_000_000
+        case .best: return 100_000_000
         case .balanced: return 10_000_000
         case .fast: return 6_000_000
         }
@@ -1870,8 +1870,9 @@ final class MacSender: NSObject, SCStreamOutput, SCStreamDelegate {
     private func setupEncoder(width: Int, height: Int) throws {
         // Low-latency rate control: the hardware encoder emits every frame
         // immediately instead of pipelining. (`-lowlatency NO` for A/B.)
-        let lowLatency = UserDefaults.standard.object(forKey: "lowlatency") == nil
-            || UserDefaults.standard.bool(forKey: "lowlatency")
+        // Off by default in this fork: at 4096x2304 the low-latency encoder returned
+        // nil buffers for every frame on an M4 Mac Studio (receiver saw nothing).
+        let lowLatency = UserDefaults.standard.bool(forKey: "lowlatency")
         // The spec filters which encoder VideoToolbox is allowed to pick, so an
         // unsupported key fails creation outright rather than being ignored the
         // way the properties below are: this key *requires* an encoder that

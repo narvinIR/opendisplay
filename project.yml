@@ -71,12 +71,12 @@ targets:
         # verifies update signatures against this public key before installing.
         SUPublicEDKey: rYxlIePmwzi2bRo/qIsuY2TqTnQ34li2gQhJpGBiumw=
         # Check for updates automatically in the background on a schedule.
-        SUEnableAutomaticChecks: true
+        SUEnableAutomaticChecks: false
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.peetzweg.opensidecar.mac
-        PRODUCT_NAME: OpenDisplay
-        BUNDLE_DISPLAY_NAME: OpenDisplay
+        PRODUCT_BUNDLE_IDENTIFIER: com.peetzweg.opensidecar.mac.dima
+        PRODUCT_NAME: OpenDisplay Dima
+        BUNDLE_DISPLAY_NAME: OpenDisplay Dima
         SWIFT_OBJC_BRIDGING_HEADER: Mac/OpenSidecarMac-Bridging-Header.h
         ENABLE_HARDENED_RUNTIME: YES
         CODE_SIGN_ENTITLEMENTS: Mac/OpenSidecarMac.entitlements
@@ -127,7 +127,7 @@ targets:
         # release.yml next to the sender's appcast.
         SUFeedURL: https://opendisplay.app/appcast-receiver.xml
         SUPublicEDKey: rYxlIePmwzi2bRo/qIsuY2TqTnQ34li2gQhJpGBiumw=
-        SUEnableAutomaticChecks: true
+        SUEnableAutomaticChecks: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.peetzweg.opensidecar.mac.receiver
