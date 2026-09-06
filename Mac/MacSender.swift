@@ -1622,12 +1622,21 @@ final class MacSender: NSObject, SCStreamOutput, SCStreamDelegate {
         let image = cursor.image
         guard let tiff = image.tiffRepresentation else { return }
         let hash = tiff.hashValue ^ Int(displaySize.width) &* 31
+            ^ Int((UserDefaults(suiteName: "com.apple.universalaccess")?
+                .double(forKey: "mouseDriverCursorSize") ?? 1.0) * 100) &* 7
         guard hash != lastCursorPNGHash else { return }
         guard let rep = NSBitmapImageRep(data: tiff),
               let png = rep.representation(using: .png, properties: [:]),
               png.count < 24_000 else { return }
         lastCursorPNGHash = hash
-        let size = image.size            // Mac points
+        // Fork: honour the Accessibility pointer size (System Settings →
+        // Accessibility → Display → Pointer size). NSCursor.image is the
+        // unscaled base image, so without this a 2x pointer on the Mac shows
+        // up half-size on the receiver.
+        let pointerScale = max(1.0, UserDefaults(suiteName: "com.apple.universalaccess")?
+            .double(forKey: "mouseDriverCursorSize") ?? 1.0)
+        let size = CGSize(width: image.size.width * pointerScale,
+                          height: image.size.height * pointerScale)   // Mac points
         let hot = cursor.hotSpot
         // Normalized against the display so the phone can size/anchor the
         // sprite without knowing capture scale or HiDPI factor.
