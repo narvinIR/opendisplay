@@ -117,6 +117,11 @@ final class StreamReceiver: ObservableObject {
     private var formatDesc: CMVideoFormatDescription?
     private var sps: Data?
     private var pps: Data?
+    private var vps: Data?          // HEVC only
+    /// Codec of the incoming stream. H.264 unless the sender announced
+    /// {"type":"codec","codec":"hevc"} (fork: 5K needs HEVC — H.264 hardware
+    /// decode tops out at 4096x2304).
+    private var codecHEVC = false
 
     // Liveness: the Mac streams video and pings every 2s; if nothing arrives
     // for 5s the connection is half-open (Mac killed, tunnel died) — drop it
@@ -225,6 +230,8 @@ final class StreamReceiver: ObservableObject {
     // nothing about. nil = advertise nothing (sender streams full size).
     private let maxEncodeWide: Int?
     private let maxEncodeHigh: Int?
+    /// Offered in hello: this receiver can decode HEVC (fork).
+    private let hevcCapable: Bool
     /// What to advertise when the user-set service name is empty.
     private let fallbackServiceName: String
 
@@ -296,12 +303,14 @@ final class StreamReceiver: ObservableObject {
 
     init(displayLayer: AVSampleBufferDisplayLayer, deviceKind: String,
          fallbackServiceName: String,
-         maxEncodeWide: Int? = nil, maxEncodeHigh: Int? = nil) {
+         maxEncodeWide: Int? = nil, maxEncodeHigh: Int? = nil,
+         hevcCapable: Bool = false) {
         self.displayLayer = displayLayer
         self.deviceKind = deviceKind
         self.fallbackServiceName = fallbackServiceName
         self.maxEncodeWide = maxEncodeWide
         self.maxEncodeHigh = maxEncodeHigh
+        self.hevcCapable = hevcCapable
         displayLayer.videoGravity = .resizeAspect
     }
 
@@ -750,6 +759,14 @@ final class StreamReceiver: ObservableObject {
             macInputP50 = obj["inp50"] as? Double ?? macInputP50
             macInputP95 = obj["inp95"] as? Double ?? macInputP95
             macCapFps = obj["capFps"] as? Int ?? macCapFps
+        case "codec":
+            // Fork: the sender names the codec of the frames that follow.
+            let hevc = (obj["codec"] as? String) == "hevc"
+            if hevc != codecHEVC || formatDesc == nil {
+                codecHEVC = hevc
+                vps = nil; sps = nil; pps = nil; formatDesc = nil
+                Log.info("codec announced: \(hevc ? "HEVC" : "H.264")")
+            }
         case "cursor":
             applyCursor(obj)
         case "cursorImg":
@@ -846,6 +863,9 @@ final class StreamReceiver: ObservableObject {
             hello["maxEncodeWide"] = maxEncodeWide
             hello["maxEncodeHigh"] = maxEncodeHigh
         }
+        // Additive (fork): a sender that understands it switches to HEVC and
+        // tells us with a "codec" control message before the first frame.
+        if hevcCapable { hello["hevc"] = true }
         // Additive: the addresses this receiver can be reached on, so the
         // sender can probe for a better (cabled) path and migrate a WiFi
         // session onto it — mDNS resolution under an interface-restricted
@@ -1044,6 +1064,19 @@ final class StreamReceiver: ObservableObject {
         var vclNALUs: [Data] = []
         for nalu in nalus {
             guard let first = nalu.first else { continue }
+            if codecHEVC {
+                switch (first >> 1) & 0x3F {
+                case 32:                             // VPS
+                    if vps != nalu { vps = nalu; formatDesc = nil }
+                case 33:                             // SPS
+                    if sps != nalu { sps = nalu; formatDesc = nil }
+                case 34:                             // PPS
+                    if pps != nalu { pps = nalu; formatDesc = nil }
+                case 35, 39, 40: break               // AUD / SEI — skip
+                default: vclNALUs.append(nalu)       // slice data
+                }
+                continue
+            }
             switch first & 0x1F {
             case 7:                                  // SPS (stream may change
                 if sps != nalu {                     //  size on rotation)
@@ -1060,8 +1093,15 @@ final class StreamReceiver: ObservableObject {
             }
         }
         if formatDesc == nil, let sps, let pps {
-            displayLayer.flush()   // drop any frames from the previous format
-            buildFormatDescription(sps: sps, pps: pps)
+            if codecHEVC {
+                if let vps {
+                    displayLayer.flush()
+                    buildFormatDescriptionHEVC(vps: vps, sps: sps, pps: pps)
+                }
+            } else {
+                displayLayer.flush()   // drop any frames from the previous format
+                buildFormatDescription(sps: sps, pps: pps)
+            }
         }
         guard !vclNALUs.isEmpty else { return }
         // All slices of one wire frame go into ONE sample buffer.
@@ -1093,6 +1133,40 @@ final class StreamReceiver: ObservableObject {
                     setStatus("Receiving \(dims.width)×\(dims.height)")
                 } else {
                     Log.info("format description FAILED: \(status)")
+                }
+            }
+        }
+    }
+
+    private func buildFormatDescriptionHEVC(vps: Data, sps: Data, pps: Data) {
+        vps.withUnsafeBytes { vpsBuf in
+            sps.withUnsafeBytes { spsBuf in
+                pps.withUnsafeBytes { ppsBuf in
+                    let ptrs: [UnsafePointer<UInt8>] = [
+                        vpsBuf.bindMemory(to: UInt8.self).baseAddress!,
+                        spsBuf.bindMemory(to: UInt8.self).baseAddress!,
+                        ppsBuf.bindMemory(to: UInt8.self).baseAddress!
+                    ]
+                    let sizes = [vps.count, sps.count, pps.count]
+                    let status = CMVideoFormatDescriptionCreateFromHEVCParameterSets(
+                        allocator: kCFAllocatorDefault,
+                        parameterSetCount: 3,
+                        parameterSetPointers: ptrs,
+                        parameterSetSizes: sizes,
+                        nalUnitHeaderLength: 4,
+                        extensions: nil,
+                        formatDescriptionOut: &formatDesc
+                    )
+                    if status == noErr, let formatDesc {
+                        let dims = CMVideoFormatDescriptionGetDimensions(formatDesc)
+                        Log.info("format description built (HEVC): \(dims.width)x\(dims.height)")
+                        DispatchQueue.main.async {
+                            self.videoSize = CGSize(width: Int(dims.width), height: Int(dims.height))
+                        }
+                        setStatus("Receiving \(dims.width)×\(dims.height) HEVC")
+                    } else {
+                        Log.info("format description (HEVC) FAILED: \(status)")
+                    }
                 }
             }
         }

@@ -14,6 +14,7 @@ import AVFoundation
 import Combine
 import IOKit.pwr_mgt
 import SwiftUI
+import VideoToolbox
 
 @MainActor
 final class ReceiverController: ObservableObject {
@@ -45,10 +46,16 @@ final class ReceiverController: ObservableObject {
         // M4 Pro — a format limit, not an age one. A 5K/6K panel still gets
         // its full desktop; the stream is capped and upscaled. Revisit when
         // an HEVC path lands (HEVC decodes 5K fine even on a 2017 iMac).
+        // Fork: with hardware HEVC the ceiling is the full 5K panel (a 2017
+        // iMac decodes 5120x2880 HEVC at 128 fps / 9 % CPU — measured).
+        let hevc = VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC)
         let receiver = StreamReceiver(displayLayer: AVSampleBufferDisplayLayer(),
                                       deviceKind: "Mac",
                                       fallbackServiceName: fallbackName,
-                                      maxEncodeWide: 4096, maxEncodeHigh: 2304)
+                                      maxEncodeWide: hevc ? 5120 : 4096,
+                                      maxEncodeHigh: hevc ? 2880 : 2304,
+                                      hevcCapable: hevc)
+        Log.info("hardware HEVC decode: \(hevc ? "yes — ceiling 5120x2880" : "no — H.264 ceiling 4096x2304")")
         let saved = UserDefaults.standard.string(forKey: "receiverName")
         receiver.serviceName = (saved?.isEmpty == false) ? saved! : fallbackName
         announcePanel(to: receiver)

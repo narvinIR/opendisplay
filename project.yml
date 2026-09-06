@@ -132,12 +132,12 @@ targets:
         SUEnableAutomaticChecks: false
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.peetzweg.opensidecar.mac.receiver
-        PRODUCT_NAME: OpenDisplay Receiver
-        BUNDLE_DISPLAY_NAME: OpenDisplay Receiver
+        PRODUCT_BUNDLE_IDENTIFIER: com.peetzweg.opensidecar.mac.receiver.dima
+        PRODUCT_NAME: OpenDisplay Receiver Dima
+        BUNDLE_DISPLAY_NAME: OpenDisplay Receiver Dima
         # Log.swift's file locking helpers live in the C bridging header.
         SWIFT_OBJC_BRIDGING_HEADER: Mac/OpenSidecarMac-Bridging-Header.h
-        ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_HARDENED_RUNTIME: NO   # ad-hoc сборка: см. отправитель
         CODE_SIGN_ENTITLEMENTS: MacReceiver/OpenSidecarMacReceiver.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       configs:
