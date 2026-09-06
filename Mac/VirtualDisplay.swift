@@ -171,7 +171,7 @@ final class VirtualDisplay {
         // Fork: any @2x mode counts — the user may have picked a smaller
         // "looks like" size in System Settings; only a 1x fallback is corrected.
         if let current = CGDisplayCopyDisplayMode(display.displayID),
-           current.pixelWidth == current.width * 2 {
+           current.pixelWidth > current.width {   // scaled modes all render at the 5K framebuffer
             return true
         }
         var config: CGDisplayConfigRef?
