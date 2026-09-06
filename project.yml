@@ -78,7 +78,9 @@ targets:
         PRODUCT_NAME: OpenDisplay Dima
         BUNDLE_DISPLAY_NAME: OpenDisplay Dima
         SWIFT_OBJC_BRIDGING_HEADER: Mac/OpenSidecarMac-Bridging-Header.h
-        ENABLE_HARDENED_RUNTIME: YES
+        # Ad-hoc local build: hardened runtime refuses the embedded Sparkle
+        # framework ("different Team IDs") and the app dies at launch.
+        ENABLE_HARDENED_RUNTIME: NO
         CODE_SIGN_ENTITLEMENTS: Mac/OpenSidecarMac.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       configs:
