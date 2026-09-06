@@ -59,9 +59,7 @@ final class VirtualDisplay {
 
         settings = CGVirtualDisplaySettings()
         settings.hiDPI = 1
-        settings.modes = [
-            CGVirtualDisplayMode(width: UInt(pointsWide), height: UInt(pointsHigh), refreshRate: 60)
-        ]
+        settings.modes = Self.modeList(pointsWide: pointsWide, pointsHigh: pointsHigh)
         guard display.apply(settings) else {
             Log.info("CGVirtualDisplay applySettings FAILED")
             return nil
@@ -107,9 +105,7 @@ final class VirtualDisplay {
 
         let newSettings = CGVirtualDisplaySettings()
         newSettings.hiDPI = 1
-        newSettings.modes = [
-            CGVirtualDisplayMode(width: UInt(pointsWide), height: UInt(pointsHigh), refreshRate: 60)
-        ]
+        newSettings.modes = Self.modeList(pointsWide: pointsWide, pointsHigh: pointsHigh)
         guard display.apply(newSettings) else {
             Log.info("virtual display \(display.displayID) applySettings FAILED during resize")
             return false
@@ -148,6 +144,17 @@ final class VirtualDisplay {
     /// `recover`, a missing @2x mode (macOS can replace the whole mode list
     /// when it restores saved display state) re-applies our settings to
     /// publish it again instead of failing silently forever.
+    /// Fork: besides the native point size, offer the "looks like" sizes a
+    /// real Retina panel has, so the user can match the desktop scale of the
+    /// other monitors (System Settings → Displays). All @2x.
+    private static func modeList(pointsWide: Int, pointsHigh: Int) -> [CGVirtualDisplayMode] {
+        var sizes: [(Int, Int)] = [(pointsWide, pointsHigh)]
+        for (w, h) in [(2048, 1152), (1920, 1080), (1600, 900)] where w < pointsWide {
+            sizes.append((w, h))
+        }
+        return sizes.map { CGVirtualDisplayMode(width: UInt($0.0), height: UInt($0.1), refreshRate: 60) }
+    }
+
     @discardableResult
     private func selectHiDPIMode(recover: Bool = false) -> Bool {
         let opts = [kCGDisplayShowDuplicateLowResolutionModes: kCFBooleanTrue] as CFDictionary
@@ -161,8 +168,10 @@ final class VirtualDisplay {
             }
             return false
         }
+        // Fork: any @2x mode counts — the user may have picked a smaller
+        // "looks like" size in System Settings; only a 1x fallback is corrected.
         if let current = CGDisplayCopyDisplayMode(display.displayID),
-           current.width == hidpi.width, current.pixelWidth == hidpi.pixelWidth {
+           current.pixelWidth == current.width * 2 {
             return true
         }
         var config: CGDisplayConfigRef?
