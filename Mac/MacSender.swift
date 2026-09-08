@@ -1644,8 +1644,11 @@ final class MacSender: NSObject, SCStreamOutput, SCStreamDelegate {
             "{\"type\":\"cursorImg\",\"nw\":%.5f,\"nh\":%.5f,\"ax\":%.3f,\"ay\":%.3f,\"png\":\"%@\"}",
             size.width / displaySize.width,
             size.height / displaySize.height,
-            size.width > 0 ? hot.x / size.width : 0,
-            size.height > 0 ? hot.y / size.height : 0,
+            // Fork: the hotspot is in unscaled image points — normalise it
+            // against the base image, not the scaled sprite, or the tip
+            // lands right/below the real click by hot*(scale-1).
+            image.size.width > 0 ? hot.x / image.size.width : 0,
+            image.size.height > 0 ? hot.y / image.size.height : 0,
             png.base64EncodedString())
         queue.async { self.sendJSONFrame(msg) }
     }
